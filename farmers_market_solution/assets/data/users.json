@@ -1,0 +1,18 @@
+{
+  "users": [
+    {
+      "id": "1",
+      "username": "farmer1",
+      "password": "password123",
+      "role": "farmer",
+      "name": "John Farmer"
+    },
+    {
+      "id": "2",
+      "username": "consumer1",
+      "password": "password123",
+      "role": "consumer",
+      "name": "Alice Consumer"
+    }
+  ]
+}

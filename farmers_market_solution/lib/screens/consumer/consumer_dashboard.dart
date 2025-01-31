@@ -1,111 +1,244 @@
 import 'package:flutter/material.dart';
 import '../../models/product.dart';
+import '../../models/user.dart';
+import '../../services/product_service.dart';
+import '../login_screen.dart';
 
-class ConsumerDashboard extends StatelessWidget {
-  const ConsumerDashboard({Key? key}) : super(key: key);
+class ConsumerDashboard extends StatefulWidget {
+  final User user;
+  
+  const ConsumerDashboard({
+    Key? key,
+    required this.user,
+  }) : super(key: key);
+
+  @override
+  State<ConsumerDashboard> createState() => _ConsumerDashboardState();
+}
+
+class _ConsumerDashboardState extends State<ConsumerDashboard> {
+  final List<Product> _products = [];
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _priceController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _productService = ProductService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProducts();
+  }
+
+  Future<void> _loadProducts() async {
+    final products = await _productService.getProducts();
+    setState(() {
+      _products.clear();
+      _products.addAll(products);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    // TODO: Replace with actual data from backend
-    final List<Product> availableProducts = [
-      Product(
-        id: '1',
-        farmerId: 'farmer1',
-        name: 'Fresh Tomatoes',
-        description: 'Organically grown tomatoes',
-        price: 40.00,
-        unit: 'kg',
-        quantity: 100,
-        imageUrl: '',
-        listedDate: DateTime.now(),
-      ),
-      Product(
-        id: '2',
-        farmerId: 'farmer2',
-        name: 'Potatoes',
-        description: 'Fresh farm potatoes',
-        price: 30.00,
-        unit: 'kg',
-        quantity: 150,
-        imageUrl: '',
-        listedDate: DateTime.now(),
-      ),
-    ];
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Available Products'),
-        backgroundColor: Colors.blue,
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: 'Search products...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              onChanged: (value) {
-                // TODO: Implement search functionality
-              },
-            ),
+        title: Text('Welcome ${widget.user.name}'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.shopping_cart),
+            onPressed: () {
+              _viewOrders();
+            },
           ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: availableProducts.length,
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (context) => const LoginScreen(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      body: _products.isEmpty
+          ? const Center(
+              child: Text(
+                'No products listed yet.\nTap + to add your first product.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+            )
+          : ListView.builder(
+              itemCount: _products.length,
               itemBuilder: (context, index) {
-                final product = availableProducts[index];
+                final product = _products[index];
                 return Card(
                   margin: const EdgeInsets.all(8.0),
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          product.name,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text('Price: ₹${product.price} per ${product.unit}'),
-                        Text('Available Quantity: ${product.quantity} ${product.unit}'),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            ElevatedButton.icon(
-                              onPressed: () {
-                                // TODO: Implement contact farmer functionality
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Connecting with farmer...'),
-                                  ),
-                                );
-                              },
-                              icon: const Icon(Icons.message),
-                              label: const Text('Contact Farmer'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blue,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                  child: ListTile(
+                    title: Text(product.name),
+                    subtitle: Text(
+                      'Price: \$${product.price.toStringAsFixed(2)}\n'
+                      '${product.description}',
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.edit),
+                      onPressed: () => _editProduct(product),
                     ),
                   ),
                 );
               },
             ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _addProduct,
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  void _addProduct() {
+    _showProductForm();
+  }
+
+  void _editProduct(Product product) {
+    _nameController.text = product.name;
+    _priceController.text = product.price.toString();
+    _descriptionController.text = product.description;
+    _showProductForm(editingProduct: product);
+  }
+
+  void _showProductForm({Product? editingProduct}) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+          left: 16,
+          right: 16,
+          top: 16,
+        ),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Product Name',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) =>
+                    value?.isEmpty ?? true ? 'Please enter product name' : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _priceController,
+                decoration: const InputDecoration(
+                  labelText: 'Price',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+                validator: (value) =>
+                    value?.isEmpty ?? true ? 'Please enter price' : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _descriptionController,
+                decoration: const InputDecoration(
+                  labelText: 'Description',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => _submitProduct(editingProduct),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(50),
+                ),
+                child: Text(editingProduct == null ? 'Add Product' : 'Update Product'),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submitProduct(Product? editingProduct) async {
+    if (_formKey.currentState?.validate() ?? false) {
+      final newProduct = Product(
+        id: editingProduct?.id ?? DateTime.now().toString(),
+        name: _nameController.text,
+        price: double.parse(_priceController.text),
+        description: _descriptionController.text,
+      );
+
+      bool success;
+      if (editingProduct != null) {
+        success = await _productService.updateProduct(newProduct);
+      } else {
+        success = await _productService.addProduct(newProduct);
+      }
+
+      if (success) {
+        _loadProducts(); // Reload products from file
+        _nameController.clear();
+        _priceController.clear();
+        _descriptionController.clear();
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                editingProduct == null
+                    ? 'Product added successfully'
+                    : 'Product updated successfully',
+              ),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to save product'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  void _viewOrders() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('My Orders'),
+        content: const SizedBox(
+          width: double.maxFinite,
+          child: Text('Order history coming soon!'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
           ),
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _priceController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
   }
 }
