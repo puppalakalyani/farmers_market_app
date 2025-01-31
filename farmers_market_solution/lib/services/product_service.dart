@@ -1,15 +1,44 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/product.dart';
 
 class ProductService {
+  static final ProductService _instance = ProductService._internal();
+  factory ProductService() => _instance;
+  ProductService._internal();
+
   static const String _fileName = 'assets/data/products.json';
+  final _productsController = StreamController<List<Product>>.broadcast();
+
+  Stream<List<Product>> get productsStream => _productsController.stream;
+  
+  Future<String> get _localPath async {
+    final directory = await getApplicationDocumentsDirectory();
+    return '${directory.path}/products.json';
+  }
+
+  Future<void> initializeProducts() async {
+    try {
+      final localFile = File(await _localPath);
+      if (!await localFile.exists()) {
+        // Copy initial data from assets
+        final String jsonString = await rootBundle.loadString(_fileName);
+        await localFile.writeAsString(jsonString);
+      }
+      final products = await getProducts();
+      _productsController.add(products);
+    } catch (e) {
+      print('Error initializing products: $e');
+    }
+  }
 
   Future<List<Product>> getProducts() async {
     try {
-      final String jsonString = await rootBundle.loadString(_fileName);
+      final file = File(await _localPath);
+      final String jsonString = await file.readAsString();
       final Map<String, dynamic> jsonData = json.decode(jsonString);
       final List<dynamic> productsJson = jsonData['products'];
       
@@ -27,10 +56,11 @@ class ProductService {
       };
       
       final String jsonString = json.encode(jsonData);
-      final directory = await getApplicationDocumentsDirectory();
-      final file = File('${directory.path}/products.json');
+      final file = File(await _localPath);
       await file.writeAsString(jsonString);
       
+      // Notify listeners about the update
+      _productsController.add(products);
       return true;
     } catch (e) {
       print('Error saving products: $e');
@@ -62,5 +92,9 @@ class ProductService {
       print('Error updating product: $e');
       return false;
     }
+  }
+
+  void dispose() {
+    _productsController.close();
   }
 }
